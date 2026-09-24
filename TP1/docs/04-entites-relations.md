@@ -27,7 +27,7 @@ Source : https://eonet.gsfc.nasa.gov/docs/v3
 - `type`
 - `coordinates`
 
-**Justification** : ce sont les 4 objets métier identifiables distinctement dans le payload EONET — chacun a son propre identifiant ou sa propre logique d'existence indépendante.
+**Justification** : ce sont les 4 objets métier identifiables distinctement dans le payload EONET chacun a son propre identifiant ou sa propre logique d'existence indépendante.
 
 ---
 

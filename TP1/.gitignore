@@ -1,0 +1,16 @@
+# Secrets / environnement local
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Docker
+*.log
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/
