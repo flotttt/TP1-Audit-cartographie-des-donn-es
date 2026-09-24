@@ -76,6 +76,17 @@ GeoJSON des coordonnées, contrainte d'unicité des observations).
 
 Prérequis : Docker et Docker Compose.
 
+### Tout démarrer d'un coup (recommandé)
+
+Le script `start.sh` crée le `.env` si besoin, build et lance les services, attend
+que la base soit prête, puis charge les données de test :
+
+```bash
+./start.sh
+```
+
+### Ou manuellement, étape par étape
+
 ```bash
 # 1. Créer le fichier d'environnement à partir du modèle
 cp .env.example .env      # puis ajuster les mots de passe si besoin
@@ -83,7 +94,10 @@ cp .env.example .env      # puis ajuster les mots de passe si besoin
 # 2. Lancer la stack (build + démarrage)
 docker compose up -d --build
 
-# 3. Suivre l'alimentation de la base
+# 3. Charger les données de test (idempotent, rejouable sans risque de doublon)
+docker exec -i eonet-db psql -U eonet -d eonet < sql/seed.sql
+
+# 4. Suivre l'alimentation de la base par le worker
 docker compose logs -f worker
 ```
 
@@ -129,6 +143,7 @@ Il se resynchronise en boucle. La fréquence et le périmètre se règlent dans 
 ```text
 .
 ├── README.md                 # ce fichier
+├── start.sh                  # démarre tout + charge les données de test
 ├── docker-compose.yml        # orchestration des 3 services
 ├── .env.example              # modèle de configuration (à copier en .env)
 ├── docs/                     # livrables du TP (parties 1 à 5)
@@ -139,7 +154,8 @@ Il se resynchronise en boucle. La fréquence et le périmètre se règlent dans 
 │   ├── 05-mcd.md
 │   └── 06-mld.md
 ├── sql/
-│   └── init.sql              # création des tables + contraintes (livrable 6)
+│   ├── init.sql              # création des tables + contraintes (livrable 6)
+│   └── seed.sql              # données de test (livrable 6)
 └── worker/
     ├── Dockerfile
     ├── requirements.txt
