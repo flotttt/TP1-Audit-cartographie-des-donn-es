@@ -152,23 +152,29 @@ CARDS = [
 
 
 def wait_for_metabase():
-    for attempt in range(1, 61):
+    for attempt in range(1, 121):
         try:
-            response = requests.get(f"{METABASE_URL}/api/health", timeout=5)
+            response = requests.get(f"{METABASE_URL}/api/session/properties", timeout=30)
             if response.status_code == 200:
-                logger.info("Metabase up")
+                logger.info("Metabase pret")
                 return
         except requests.RequestException:
             pass
-        logger.info("Attente Metabase (tentative %s/60)", attempt)
+        logger.info("Attente Metabase (tentative %s/120)", attempt)
         time.sleep(5)
     raise RuntimeError("Metabase inaccessible")
 
 
 def get_setup_token():
-    response = requests.get(f"{METABASE_URL}/api/session/properties", timeout=10)
-    response.raise_for_status()
-    return response.json().get("setup-token")
+    for attempt in range(1, 31):
+        try:
+            response = requests.get(f"{METABASE_URL}/api/session/properties", timeout=30)
+            response.raise_for_status()
+            return response.json().get("setup-token")
+        except requests.RequestException as error:
+            logger.warning("Retry get_setup_token (%s/30) : %s", attempt, error)
+            time.sleep(5)
+    raise RuntimeError("Impossible de recuperer le setup-token")
 
 
 def do_setup(setup_token):
