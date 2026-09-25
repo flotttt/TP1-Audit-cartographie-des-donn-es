@@ -31,6 +31,10 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
       CLUSTER_ID: tp2-kafka-cluster
     ports:
@@ -44,6 +48,26 @@ services:
       interval: 10s
       timeout: 5s
       retries: 15
+
+  minio:
+    image: localstack/localstack:3
+    container_name: tp-minio
+    restart: unless-stopped
+    environment:
+      SERVICES: s3
+      DEBUG: "0"
+      PERSISTENCE: "1"
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+    ports:
+      - "4566:4566"
+    volumes:
+      - minio-data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\": \"available\"' || curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\": \"running\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -88,6 +112,27 @@ services:
       USGS_LIMIT: ${USGS_LIMIT}
       WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS}
 
+  datalake-writer:
+    build: ./TP2/datalake
+    container_name: tp-datalake-writer
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_CONSUMER_GROUP: datalake-writer
+      KAFKA_TOPIC_EONET: ${KAFKA_TOPIC_EONET}
+      KAFKA_TOPIC_USGS: ${KAFKA_TOPIC_USGS}
+      S3_ENDPOINT: http://minio:4566
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_RAW: ${S3_BUCKET_RAW}
+      BATCH_MAX_MESSAGES: ${BATCH_MAX_MESSAGES}
+      BATCH_MAX_SECONDS: ${BATCH_MAX_SECONDS}
+
   pgadmin:
     image: dpage/pgadmin4
     container_name: tp-pgadmin
@@ -103,3 +148,4 @@ services:
 volumes:
   pgdata:
   kafka-data:
+  minio-data:
