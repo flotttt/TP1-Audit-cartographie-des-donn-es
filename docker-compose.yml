@@ -158,6 +158,46 @@ services:
       AGGREGATION_MAX_HOURS: ${AGGREGATION_MAX_HOURS}
       SPARK_INTERVAL_SECONDS: ${SPARK_INTERVAL_SECONDS}
 
+  metabase:
+    image: metabase/metabase:latest
+    container_name: tp-metabase
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: h2
+      MB_DB_FILE: /metabase-data/metabase.db
+      JAVA_TIMEZONE: UTC
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase-data:/metabase-data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "-I", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  metabase-init:
+    build: ./TP2/metabase-init
+    container_name: tp-metabase-init
+    depends_on:
+      metabase:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: on-failure
+    environment:
+      METABASE_URL: http://metabase:3000
+      METABASE_ADMIN_EMAIL: ${METABASE_ADMIN_EMAIL}
+      METABASE_ADMIN_PASSWORD: ${METABASE_ADMIN_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
   pgadmin:
     image: dpage/pgadmin4
     container_name: tp-pgadmin
@@ -174,3 +214,4 @@ volumes:
   pgdata:
   kafka-data:
   minio-data:
+  metabase-data:
