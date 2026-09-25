@@ -133,6 +133,31 @@ services:
       BATCH_MAX_MESSAGES: ${BATCH_MAX_MESSAGES}
       BATCH_MAX_SECONDS: ${BATCH_MAX_SECONDS}
 
+  spark:
+    build: ./TP2/spark
+    container_name: tp-spark
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      datalake-writer:
+        condition: service_started
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      S3_ENDPOINT: http://minio:4566
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_RAW: ${S3_BUCKET_RAW}
+      AGGREGATION_MAX_KM: ${AGGREGATION_MAX_KM}
+      AGGREGATION_MAX_HOURS: ${AGGREGATION_MAX_HOURS}
+      SPARK_INTERVAL_SECONDS: ${SPARK_INTERVAL_SECONDS}
+
   pgadmin:
     image: dpage/pgadmin4
     container_name: tp-pgadmin
