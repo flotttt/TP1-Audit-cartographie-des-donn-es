@@ -17,19 +17,57 @@ services:
       timeout: 5s
       retries: 10
 
-  eonet:
-    build: ./TP1/worker
-    container_name: tp-eonet-worker
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: tp-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: "0"
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: tp2-kafka-cluster
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: tp-kafka-ui
     restart: unless-stopped
     depends_on:
-      db:
+      kafka:
         condition: service_healthy
     environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      KAFKA_CLUSTERS_0_NAME: tp2
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8080:8080"
+
+  eonet:
+    build: ./TP2/api
+    container_name: tp-eonet-producer
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC_EONET}
       EONET_STATUS: ${EONET_STATUS}
       EONET_DAYS: ${EONET_DAYS}
       EONET_LIMIT: ${EONET_LIMIT}
@@ -37,17 +75,14 @@ services:
 
   usgs:
     build: ./TP2/source2
-    container_name: tp-usgs-worker
+    container_name: tp-usgs-producer
     restart: unless-stopped
     depends_on:
-      db:
+      kafka:
         condition: service_healthy
     environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC_USGS}
       USGS_MIN_MAGNITUDE: ${USGS_MIN_MAGNITUDE}
       USGS_DAYS: ${USGS_DAYS}
       USGS_LIMIT: ${USGS_LIMIT}
@@ -67,3 +102,4 @@ services:
 
 volumes:
   pgdata:
+  kafka-data:
