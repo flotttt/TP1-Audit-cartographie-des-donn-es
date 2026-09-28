@@ -53,7 +53,7 @@ Le premier boot prend **3 à 5 minutes** (téléchargement d'images + build des 
 | **cAdvisor** (UI native conteneurs) | http://localhost:8081 | — |
 | **Kafka UI** | http://localhost:8080 | — |
 | **pgAdmin** | http://localhost:5050 | `admin@eonet.com` / `change-me` |
-| **LocalStack S3** (API only) | http://localhost:4566 | `minio` / `minio12345` |
+| **LocalStack S3** (API only) | http://localhost:4566 | `localstack` / `localstack12345` |
 | **PostgreSQL** | `localhost:5432` | `eonet` / `change-me` |
 
 ### Ajouter la base dans pgAdmin
@@ -65,8 +65,8 @@ Le premier boot prend **3 à 5 minutes** (téléchargement d'images + build des 
 ### Inspecter le Data Lake S3
 
 ```bash
-docker exec tp-minio awslocal s3 ls s3://raw/ --recursive --human-readable
-docker exec tp-minio awslocal s3 cp s3://raw/eonet/... -   # dump d'un fichier
+docker exec tp-localstack awslocal s3 ls s3://raw/ --recursive --human-readable
+docker exec tp-localstack awslocal s3 cp s3://raw/eonet/... -   # dump d'un fichier
 ```
 
 ## Architecture
@@ -189,7 +189,7 @@ Le script applique 32 contrôles sur `staging.*` (raw) puis `public.*` (Spark-cl
 | 2 | `tp-usgs-producer` | Toutes les 15 min : fetch USGS → publie sur topic `usgs.earthquakes` |
 | 3 | `tp-kafka` | Broker Kafka (mode KRaft, mono-broker) |
 | 4 | `tp-datalake-writer` | Consumer : batch les messages → écrit des fichiers `.jsonl` dans S3 (`raw/eonet/`, `raw/usgs/`) partitionnés Hive-style (`year=/month=/day=/hour=/`) |
-| 5 | `tp-minio` | LocalStack S3 → sert de Data Lake |
+| 5 | `tp-localstack` | LocalStack S3 → sert de Data Lake |
 | 6 | `tp-spark` | Toutes les 15 min : lit tout le Data Lake, nettoie (types/dedup/contraintes), agrège via haversine (rayon 500 km, fenêtre ±7 jours), écrit en PostgreSQL via JDBC |
 | 7 | `tp-db` | PostgreSQL (schéma TP1 + tables `earthquake` et `event_earthquake`) |
 | 8 | `tp-metabase` | UI Data Viz métier — dashboards pré-provisionnés par `tp-metabase-init` |
@@ -223,7 +223,7 @@ docker exec tp-db psql -U eonet -d eonet -c "
   UNION ALL SELECT 'event_earthquake', count(*) FROM event_earthquake;"
 
 # Voir les objets du Data Lake
-docker exec tp-minio awslocal s3 ls s3://raw/ --recursive --human-readable
+docker exec tp-localstack awslocal s3 ls s3://raw/ --recursive --human-readable
 
 # Voir les topics Kafka + offsets
 docker exec tp-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list

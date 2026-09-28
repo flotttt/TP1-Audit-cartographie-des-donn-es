@@ -15,9 +15,9 @@ KAFKA_GROUP = os.environ.get("KAFKA_CONSUMER_GROUP", "datalake-writer")
 TOPIC_EONET = os.environ.get("KAFKA_TOPIC_EONET", "eonet.events")
 TOPIC_USGS = os.environ.get("KAFKA_TOPIC_USGS", "usgs.earthquakes")
 
-S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://minio:4566")
-S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "minio")
-S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "minio12345")
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localstack:4566")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "localstack")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "localstack12345")
 S3_BUCKET = os.environ.get("S3_BUCKET_RAW", "raw")
 S3_REGION = os.environ.get("S3_REGION", "us-east-1")
 

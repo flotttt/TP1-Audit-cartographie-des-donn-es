@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import time
 
 import psycopg
 from pyspark.sql import SparkSession
@@ -153,13 +154,17 @@ def write_jdbc(dataframe, table):
 
 
 def process_eonet(spark):
-    raw = (
-        spark.read.schema(EONET_SCHEMA)
-        .option("recursiveFileLookup", "true")
-        .json(f"s3a://{S3_BUCKET}/eonet/")
-        .cache()
-    )
-    logger.info("Events EONET bruts (lus depuis S3) : %s", raw.count())
+    try:
+        raw = (
+            spark.read.schema(EONET_SCHEMA)
+            .option("recursiveFileLookup", "true")
+            .json(f"s3a://{S3_BUCKET}/eonet/")
+            .cache()
+        )
+        logger.info("Events EONET bruts (lus depuis S3) : %s", raw.count())
+    except Exception as error:
+        logger.warning("Aucune donnee EONET dans S3, on saute ce cycle : %s", error)
+        return None
 
     staging_event = raw.select(
         F.col("id"),
@@ -290,13 +295,17 @@ def process_eonet(spark):
 
 
 def process_usgs(spark):
-    raw = (
-        spark.read.schema(USGS_SCHEMA)
-        .option("recursiveFileLookup", "true")
-        .json(f"s3a://{S3_BUCKET}/usgs/")
-        .cache()
-    )
-    logger.info("Seismes USGS bruts (lus depuis S3) : %s", raw.count())
+    try:
+        raw = (
+            spark.read.schema(USGS_SCHEMA)
+            .option("recursiveFileLookup", "true")
+            .json(f"s3a://{S3_BUCKET}/usgs/")
+            .cache()
+        )
+        logger.info("Seismes USGS bruts (lus depuis S3) : %s", raw.count())
+    except Exception as error:
+        logger.warning("Aucune donnee USGS dans S3, on saute ce cycle : %s", error)
+        return None
 
     staging_eq = raw.select(
         F.col("id"),
@@ -410,6 +419,23 @@ def compute_event_earthquake(eonet_df, earthquake_df):
     write_jdbc(aggregated, "event_earthquake")
 
 
+def wait_for_data_lake(spark, max_attempts=60):
+    for attempt in range(1, max_attempts + 1):
+        try:
+            eonet = spark.read.option("recursiveFileLookup", "true").json(f"s3a://{S3_BUCKET}/eonet/")
+            usgs = spark.read.option("recursiveFileLookup", "true").json(f"s3a://{S3_BUCKET}/usgs/")
+            eonet_count = eonet.count()
+            usgs_count = usgs.count()
+            if eonet_count > 0 and usgs_count > 0:
+                logger.info("Data Lake pret : %s events, %s seismes", eonet_count, usgs_count)
+                return True
+        except Exception as error:
+            logger.info("Data Lake pas encore rempli (tentative %s/%s) : %s", attempt, max_attempts, str(error)[:120])
+        time.sleep(10)
+    logger.warning("Data Lake toujours vide apres %s tentatives, on tente le cycle quand meme", max_attempts)
+    return False
+
+
 def main():
     spark = (
         SparkSession.builder.appName("tp2-clean-and-load")
@@ -419,10 +445,14 @@ def main():
     spark.sparkContext.setLogLevel("WARN")
 
     try:
+        wait_for_data_lake(spark)
         truncate_all()
         eonet_df = process_eonet(spark)
         earthquake_df = process_usgs(spark)
-        compute_event_earthquake(eonet_df, earthquake_df)
+        if eonet_df is not None and earthquake_df is not None:
+            compute_event_earthquake(eonet_df, earthquake_df)
+        else:
+            logger.warning("Pipeline saute (donnees manquantes en S3), reprise au prochain cycle")
         logger.info("Pipeline termine avec succes")
     finally:
         spark.stop()

@@ -101,9 +101,9 @@ services:
       retries: 20
       start_period: 30s
 
-  minio:
+  localstack:
     image: localstack/localstack:3
-    container_name: tp-minio
+    container_name: tp-localstack
     restart: unless-stopped
     environment:
       SERVICES: s3
@@ -114,7 +114,7 @@ services:
     ports:
       - "4566:4566"
     volumes:
-      - minio-data:/var/lib/localstack
+      - localstack-data:/var/lib/localstack
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\": \"available\"' || curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\": \"running\"'"]
       interval: 10s
@@ -171,14 +171,14 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      minio:
+      localstack:
         condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
       KAFKA_CONSUMER_GROUP: datalake-writer
       KAFKA_TOPIC_EONET: ${KAFKA_TOPIC_EONET}
       KAFKA_TOPIC_USGS: ${KAFKA_TOPIC_USGS}
-      S3_ENDPOINT: http://minio:4566
+      S3_ENDPOINT: http://localstack:4566
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_RAW: ${S3_BUCKET_RAW}
@@ -192,7 +192,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio:
+      localstack:
         condition: service_healthy
       datalake-writer:
         condition: service_started
@@ -202,7 +202,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      S3_ENDPOINT: http://minio:4566
+      S3_ENDPOINT: http://localstack:4566
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_RAW: ${S3_BUCKET_RAW}
@@ -270,10 +270,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio:
+      localstack:
         condition: service_healthy
     environment:
-      S3_ENDPOINT: http://minio:4566
+      S3_ENDPOINT: http://localstack:4566
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_RAW: ${S3_BUCKET_RAW}
@@ -306,7 +306,7 @@ services:
 volumes:
   pgdata:
   kafka-data:
-  minio-data:
+  localstack-data:
   metabase-data:
   prometheus-data:
   grafana-data:
