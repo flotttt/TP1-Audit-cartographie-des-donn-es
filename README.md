@@ -52,15 +52,15 @@ Le premier boot prend **3 à 5 minutes** (téléchargement d'images + build des 
 | **Prometheus** (métriques brutes) | http://localhost:9090 | — |
 | **cAdvisor** (UI native conteneurs) | http://localhost:8081 | — |
 | **Kafka UI** | http://localhost:8080 | — |
-| **pgAdmin** | http://localhost:5050 | `admin@eonet.com` / `admin` |
+| **pgAdmin** | http://localhost:5050 | `admin@eonet.com` / `change-me` |
 | **LocalStack S3** (API only) | http://localhost:4566 | `minio` / `minio12345` |
-| **PostgreSQL** | `localhost:5432` | `eonet` / `eonet` |
+| **PostgreSQL** | `localhost:5432` | `eonet` / `change-me` |
 
 ### Ajouter la base dans pgAdmin
 
 1. Login sur http://localhost:5050
 2. Add New Server → Name : `tp`
-3. Connection : Host = `db`, User = `eonet`, Password = `eonet`
+3. Connection : Host = `db`, User = `eonet`, Password = `change-me`
 
 ### Inspecter le Data Lake S3
 

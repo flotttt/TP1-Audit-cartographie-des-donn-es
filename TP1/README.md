@@ -1,9 +1,15 @@
-# TP1 Audit & cartographie des données : NASA EONET
+# TP1 — Audit & cartographie des données : NASA EONET
 
 Cartographie d'un jeu de données réel, de la source brute jusqu'à une base PostgreSQL
 interrogeable. Le sujet retenu est l'environnement, à travers le suivi des
 événements naturels dans le monde (feux de forêt, tempêtes, volcans...) via l'API
 publique EONET (Earth Observatory Natural Event Tracker) de la NASA.
+
+> **Portée de ce document.** Ce README couvre le **livrable TP1** uniquement : la
+> cartographie, la modélisation et le schéma initial. Le dépôt contient aujourd'hui
+> les trois TP et une stack unique orchestrée depuis la racine — pour lancer quoi que
+> ce soit, voir le [README racine](../README.md). Le TP2 industrialise le pipeline
+> (Kafka, Data Lake, Spark, Metabase, monitoring) et le TP3 ajoute l'audit qualité.
 
 ---
 
@@ -18,8 +24,8 @@ Chaque livrable du TP est traité dans un document dédié du dossier [`docs/`](
 | 3 | Dictionnaire de données | [`docs/03-dictionnaire.md`](docs/03-dictionnaire.md) |
 | 4 | Entités, attributs, relations et cardinalités | [`docs/04-entites-relations.md`](docs/04-entites-relations.md) |
 | 5 | Modèle conceptuel (MCD) | [`docs/05-mcd.md`](docs/05-mcd.md) |
-| 5 | Modèle logique (MLD) | [`docs/06-mld.md`](docs/06-mld.md) |
-| 6 | Base PostgreSQL (script + données de test) | [`sql/init.sql`](sql/init.sql) |
+| 6 | Modèle logique (MLD) | [`docs/06-mld.md`](docs/06-mld.md) |
+| 7 | Base PostgreSQL (script + données de test) | [`sql/init.sql`](sql/init.sql) · [`sql/seed.sql`](sql/seed.sql) |
 
 ---
 
@@ -59,75 +65,94 @@ Le détail des attributs, types, clés et contraintes est dans le [MLD](docs/06-
 et le script [`sql/init.sql`](sql/init.sql) (PK/FK, `CHECK` sur les URLs, validation
 GeoJSON des coordonnées, contrainte d'unicité des observations).
 
+> **Évolution au TP2.** Le schéma est étendu à **8 tables** avec l'ajout de la source
+> USGS : `earthquake` (séismes) et `event_earthquake` (rapprochement spatio-temporel
+> event ↔ séisme, calculé par Spark). Le schéma effectivement appliqué au démarrage de
+> la stack est [`TP2/postgres/init.sql`](../TP2/postgres/init.sql) ; le script
+> [`sql/init.sql`](sql/init.sql) de ce dossier reste le livrable du TP1, à périmètre
+> EONET.
+
 ---
 
 ## Architecture technique
 
-| Composant | Rôle | Fichier |
-|-----------|------|---------|
-| **PostgreSQL 16** | Base de données, schéma créé au démarrage | [`sql/init.sql`](sql/init.sql) |
-| **Worker Python** | Extraction API EONET → upsert en base | [`worker/worker.py`](worker/worker.py) |
-| **pgAdmin** | Administration de la base via navigateur | — |
-| **Docker Compose** | Orchestration des 3 services | [`docker-compose.yml`](docker-compose.yml) |
+Au TP1, la stack tenait en trois services. Depuis le TP2, tout est orchestré par le
+`docker-compose.yml` de la racine — les composants ci-dessous y sont toujours présents,
+sous les noms de conteneurs indiqués.
+
+| Composant | Conteneur | Rôle | Fichier |
+|-----------|-----------|------|---------|
+| **PostgreSQL 16** | `tp-db` | Base de données, schéma créé au démarrage | [`TP2/postgres/init.sql`](../TP2/postgres/init.sql) |
+| **Worker Python** | — *(voir note)* | Extraction API EONET → upsert en base | [`worker/worker.py`](worker/worker.py) |
+| **pgAdmin** | `tp-pgadmin` | Administration de la base via navigateur | — |
+| **Docker Compose** | — | Orchestration de l'ensemble des services | [`../docker-compose.yml`](../docker-compose.yml) |
+
+> **Note sur le worker.** `worker/worker.py` est l'implémentation d'origine du TP1 :
+> il interroge l'API EONET et écrit directement en base. Au TP2, ce rôle est repris par
+> les **producers Kafka** (`TP2/api/` pour EONET, `TP2/source2/` pour USGS), qui
+> publient dans des topics au lieu d'écrire en base. Le worker est conservé dans le
+> dépôt comme livrable du TP1 et comme référence de la logique d'upsert.
 
 ---
 
 ## Démarrage
 
-Prérequis : Docker et Docker Compose.
+Prérequis : Docker et Docker Compose. Voir le [README racine](../README.md) pour les
+pré-requis complets (RAM, ports) et le détail des services.
 
-### Tout démarrer d'un coup (recommandé)
+### Lancer la stack
 
-Le script `start.sh` crée le `.env` si besoin, build et lance les services, attend
-que la base soit prête, puis charge les données de test :
+Depuis **la racine du dépôt** :
 
 ```bash
-./start.sh
+cp .env.example .env      # les valeurs par défaut fonctionnent en local
+./start.sh                # ou : docker compose up -d --build
 ```
 
-### Ou manuellement, étape par étape
+Une fois démarré, les services utiles au périmètre TP1 :
+
+| Service | URL | Login |
+|---|---|---|
+| **PostgreSQL** | `localhost:5432` | `eonet` / `change-me` |
+| **pgAdmin** | http://localhost:5050 | `admin@eonet.com` / `change-me` |
+
+Dans pgAdmin : *Add New Server* → Name `tp` → Connection : Host `db`, User `eonet`,
+Password `change-me`.
+
+### Charger les données de test du TP1
+
+Le pipeline alimente la base en continu ; le seed n'est utile que pour disposer d'un
+jeu minimal sans attendre un cycle de collecte. Il est idempotent, rejouable sans
+risque de doublon :
 
 ```bash
-# 1. Créer le fichier d'environnement à partir du modèle
-cp .env.example .env      # puis ajuster les mots de passe si besoin
-
-# 2. Lancer la stack (build + démarrage)
-docker compose up -d --build
-
-# 3. Charger les données de test (idempotent, rejouable sans risque de doublon)
-docker exec -i eonet-db psql -U eonet -d eonet < sql/seed.sql
-
-# 4. Suivre l'alimentation de la base par le worker
-docker compose logs -f worker
+docker exec -i tp-db psql -U eonet -d eonet < TP1/sql/seed.sql
 ```
 
-Une fois démarré :
-- **PostgreSQL** : `localhost:5432` (identifiants du `.env`)
-- **pgAdmin** : http://localhost:5050 (email / mot de passe du `.env`)
-
-Vérifier le contenu de la base :
+### Vérifier le contenu de la base
 
 ```bash
-docker exec eonet-db psql -U eonet -d eonet -c \
+docker exec tp-db psql -U eonet -d eonet -c \
   "SELECT 'event', count(*) FROM event UNION ALL SELECT 'category', count(*) FROM category;"
 ```
 
-Arrêter la stack :
+### Arrêter la stack
 
 ```bash
-docker compose down          # conserve les données (volume pgdata)
+docker compose down          # conserve les données (volumes)
 docker compose down -v       # supprime aussi les données
 ```
 
 ---
 
-## Le worker
+## Le worker TP1
 
 `worker/worker.py` interroge les endpoints `/categories`, `/sources` et `/events` de
 l'API EONET, puis insère les données en base avec une logique d'`upsert`
 (`INSERT ... ON CONFLICT`) pour éviter les doublons à chaque passage.
 
-Il se resynchronise en boucle. La fréquence et le périmètre se règlent dans le `.env` :
+Il se resynchronise en boucle. La fréquence et le périmètre se règlent dans le `.env`
+de la racine :
 
 | Variable | Rôle | Défaut |
 |----------|------|--------|
@@ -136,17 +161,18 @@ Il se resynchronise en boucle. La fréquence et le périmètre se règlent dans 
 | `EONET_LIMIT` | Nombre max d'événements récupérés | `50` |
 | `WORKER_INTERVAL_SECONDS` | Intervalle entre deux synchros (`0` = une seule passe) | `900` (15 min) |
 
+Ces mêmes variables pilotent aujourd'hui les producers Kafka du TP2 : la cadence et le
+périmètre de collecte EONET n'ont pas changé, seule la destination des messages a
+évolué.
+
 ---
 
-## Structure du dépôt
+## Structure du dossier
 
 ```text
-.
+TP1/
 ├── README.md                 # ce fichier
-├── start.sh                  # démarre tout + charge les données de test
-├── docker-compose.yml        # orchestration des 3 services
-├── .env.example              # modèle de configuration (à copier en .env)
-├── docs/                     # livrables du TP (parties 1 à 5)
+├── docs/                     # livrables 1 à 6
 │   ├── 01-presentation.md
 │   ├── 02-sources.md
 │   ├── 03-dictionnaire.md
@@ -154,10 +180,23 @@ Il se resynchronise en boucle. La fréquence et le périmètre se règlent dans 
 │   ├── 05-mcd.md
 │   └── 06-mld.md
 ├── sql/
-│   ├── init.sql              # création des tables + contraintes (livrable 6)
-│   └── seed.sql              # données de test (livrable 6)
+│   ├── init.sql              # schéma TP1 : tables + contraintes (livrable 7)
+│   └── seed.sql              # données de test (livrable 7)
 └── worker/
     ├── Dockerfile
     ├── requirements.txt
-    └── worker.py             # extraction API → base
+    └── worker.py             # extraction API → base (version TP1)
 ```
+
+L'orchestration (`docker-compose.yml`, `start.sh`, `.env.example`) se trouve à la
+**racine du dépôt** et couvre les trois TP.
+
+---
+
+## Suite du projet
+
+| TP | Objet | Documentation |
+|---|---|---|
+| **TP1** | Cartographie, modélisation, base PostgreSQL | ce document |
+| **TP2** | Industrialisation : Kafka, Data Lake S3, PySpark, Metabase, monitoring | [README racine](../README.md) |
+| **TP3** | Audit qualité et nettoyage des données | [`TP3/README.md`](../TP3/README.md) |
