@@ -132,7 +132,11 @@ def truncate_all():
             "geometry, earthquake, event, category, source "
             "RESTART IDENTITY CASCADE"
         )
-    logger.info("Tables Postgres tronquees")
+        connection.execute(
+            "TRUNCATE staging.event_category, staging.event_source, staging.geometry, "
+            "staging.earthquake, staging.event, staging.category, staging.source"
+        )
+    logger.info("Tables Postgres tronquees (public + staging)")
 
 
 def write_jdbc(dataframe, table):
@@ -149,11 +153,65 @@ def write_jdbc(dataframe, table):
 
 
 def process_eonet(spark):
-    df = (
+    raw = (
         spark.read.schema(EONET_SCHEMA)
         .option("recursiveFileLookup", "true")
         .json(f"s3a://{S3_BUCKET}/eonet/")
-        .filter(F.col("id").isNotNull() & F.col("title").isNotNull() & F.col("link").isNotNull())
+        .cache()
+    )
+    logger.info("Events EONET bruts (lus depuis S3) : %s", raw.count())
+
+    staging_event = raw.select(
+        F.col("id"),
+        F.col("title"),
+        F.col("description"),
+        F.col("link"),
+        F.to_timestamp("closed").alias("closed"),
+    )
+    write_jdbc(staging_event, "staging.event")
+
+    staging_categories = (
+        raw.select(F.explode_outer("categories").alias("c"))
+        .filter(F.col("c").isNotNull())
+        .select(F.col("c.id").alias("id"), F.col("c.title").alias("title"), F.lit(None).cast("string").alias("description"))
+    )
+    write_jdbc(staging_categories, "staging.category")
+
+    staging_sources = (
+        raw.select(F.explode_outer("sources").alias("s"))
+        .filter(F.col("s").isNotNull())
+        .select(F.col("s.id").alias("id"), F.col("s.url").alias("url"))
+    )
+    write_jdbc(staging_sources, "staging.source")
+
+    staging_ec = (
+        raw.select(F.col("id").alias("event_id"), F.explode_outer("categories").alias("c"))
+        .filter(F.col("c").isNotNull())
+        .select("event_id", F.col("c.id").alias("category_id"))
+    )
+    write_jdbc(staging_ec, "staging.event_category")
+
+    staging_es = (
+        raw.select(F.col("id").alias("event_id"), F.explode_outer("sources").alias("s"))
+        .filter(F.col("s").isNotNull())
+        .select("event_id", F.col("s.id").alias("source_id"))
+    )
+    write_jdbc(staging_es, "staging.event_source")
+
+    staging_geom = (
+        raw.select(F.col("id").alias("event_id"), F.explode_outer("geometry").alias("g"))
+        .filter(F.col("g").isNotNull())
+        .select(
+            "event_id",
+            F.col("g.date").alias("date"),
+            F.col("g.type").alias("type"),
+            F.col("g.coordinates").alias("coordinates"),
+        )
+    )
+    write_jdbc(staging_geom, "staging.geometry")
+
+    df = (
+        raw.filter(F.col("id").isNotNull() & F.col("title").isNotNull() & F.col("link").isNotNull())
         .withColumn("title", F.trim(F.col("title")))
         .filter(F.length(F.col("title")) > 0)
         .filter(F.col("link").rlike("^https?://"))
@@ -162,7 +220,7 @@ def process_eonet(spark):
         .cache()
     )
     total = df.count()
-    logger.info("Events EONET candidats : %s", total)
+    logger.info("Events EONET candidats (apres cleaning) : %s", total)
 
     events_df = df.select(
         F.col("id"),
@@ -232,11 +290,31 @@ def process_eonet(spark):
 
 
 def process_usgs(spark):
-    df = (
+    raw = (
         spark.read.schema(USGS_SCHEMA)
         .option("recursiveFileLookup", "true")
         .json(f"s3a://{S3_BUCKET}/usgs/")
-        .filter(F.col("id").isNotNull())
+        .cache()
+    )
+    logger.info("Seismes USGS bruts (lus depuis S3) : %s", raw.count())
+
+    staging_eq = raw.select(
+        F.col("id"),
+        (F.col("properties.time") / F.lit(1000.0)).cast("timestamp").alias("time"),
+        F.col("properties.mag").alias("magnitude"),
+        F.col("properties.magType").alias("mag_type"),
+        F.col("properties.place").alias("place"),
+        F.when(F.size(F.col("geometry.coordinates")) >= 1, F.col("geometry.coordinates")[0]).otherwise(None).alias("longitude"),
+        F.when(F.size(F.col("geometry.coordinates")) >= 2, F.col("geometry.coordinates")[1]).otherwise(None).alias("latitude"),
+        F.when(F.size(F.col("geometry.coordinates")) >= 3, F.col("geometry.coordinates")[2]).otherwise(None).alias("depth_km"),
+        F.col("properties.tsunami").cast(BooleanType()).alias("tsunami"),
+        F.col("properties.sig").alias("significance"),
+        F.col("properties.url").alias("url"),
+    )
+    write_jdbc(staging_eq, "staging.earthquake")
+
+    df = (
+        raw.filter(F.col("id").isNotNull())
         .filter(F.col("properties.time").isNotNull())
         .filter(F.size(F.col("geometry.coordinates")) >= 2)
         .withColumn("longitude", F.col("geometry.coordinates")[0])

@@ -1,4 +1,4 @@
-# TP1 & TP2 — Audit, cartographie et pipeline data
+# TP1, TP2 & TP3 — Audit, cartographie, pipeline data et qualité
 
 Plateforme data reproductible autour de deux sources d'événements naturels :
 
@@ -144,7 +144,7 @@ flowchart TB
 │   ├── docs/                # dictionnaire, MCD, MLD
 │   └── ...
 │
-└── TP2/
+├── TP2/
     ├── TP2-PLAN.md          # plan de travail
     ├── api/                 # producer Kafka EONET
     ├── source2/             # producer Kafka USGS
@@ -158,7 +158,28 @@ flowchart TB
     │   ├── docker-stats-exporter/       # exporter CPU/mémoire par conteneur (API Docker)
     │   └── grafana/provisioning/        # datasource + dashboard auto-provisionnés
     └── docs/                # doc TP2 (sources, dico, MCD, MLD)
+
+└── TP3/                     # audit qualité SQL sur staging + public
+    ├── README.md            # comment lancer l'audit
+    ├── run-audit.sh         # orchestrateur
+    ├── sql/
+    │   ├── 00-schema-staging.sql
+    │   ├── 01-report-table.sql
+    │   ├── audit/           # 32 contrôles SQL (5 dimensions)
+    │   └── cleaning/        # imputation + correction + suppression
+    └── docs/                # cartographie, matrice, anomalies, corrections, résultats, synthèse orale
 ```
+
+## TP3 en un coup d'œil
+
+Le TP3 ajoute une **couche audit qualité** sur le pipeline TP2. Détails complets dans [`TP3/README.md`](TP3/README.md).
+
+```bash
+# Une fois la stack up et Spark ayant tourné au moins une fois :
+./TP3/run-audit.sh
+```
+
+Le script applique 32 contrôles sur `staging.*` (raw) puis `public.*` (Spark-cleaned), applique un nettoyage SQL sur staging, re-audite, et affiche un rapport before/after. Résultats détaillés stockés dans la table `data_quality_report`.
 
 ## Étapes du pipeline en détail
 

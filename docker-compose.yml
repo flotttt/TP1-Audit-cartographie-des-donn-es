@@ -11,6 +11,9 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./TP3:/tp3:ro
+      - ./TP3/sql/00-schema-staging.sql:/docker-entrypoint-initdb.d/02-staging.sql:ro
+      - ./TP3/sql/01-report-table.sql:/docker-entrypoint-initdb.d/03-report.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
