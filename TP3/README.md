@@ -1,6 +1,6 @@
-# TP3 — Audit qualité & nettoyage des données
+# TP3, audit qualité et nettoyage des données
 
-Extension du TP1/TP2. Ajoute un **audit qualité formalisé** en SQL sur les données produites par le pipeline (Data Lake → Spark → PostgreSQL), avec un rapport chiffré **avant/après** nettoyage.
+Extension du TP1 et du TP2. Ajoute un audit qualité formalisé en SQL sur les données produites par le pipeline (Data Lake, Spark, PostgreSQL), avec un rapport chiffré avant et après nettoyage.
 
 ## Livrables (mapping brief)
 
@@ -10,7 +10,7 @@ Extension du TP1/TP2. Ajoute un **audit qualité formalisé** en SQL sur les don
 | Matrice de contrôles qualité | [`docs/02-matrice-controles.md`](docs/02-matrice-controles.md) |
 | Classement des anomalies | [`docs/03-anomalies.md`](docs/03-anomalies.md) |
 | Stratégies de correction | [`docs/04-corrections.md`](docs/04-corrections.md) |
-| Résultats avant/après | [`docs/05-resultats.md`](docs/05-resultats.md) |
+| Résultats avant et après | [`docs/05-resultats.md`](docs/05-resultats.md) |
 | Synthèse pour l'oral | [`docs/06-synthese-orale.md`](docs/06-synthese-orale.md) |
 | Scripts SQL d'audit | [`sql/audit/`](sql/audit/) |
 | Scripts SQL de nettoyage | [`sql/cleaning/`](sql/cleaning/) |
@@ -19,17 +19,17 @@ Extension du TP1/TP2. Ajoute un **audit qualité formalisé** en SQL sur les don
 
 ## Approche
 
-Le TP1/TP2 alimentait directement `public.*` avec des données déjà nettoyées par Spark. Pour pouvoir mesurer la qualité **avant** intervention, le TP3 ajoute :
+Le TP1 et le TP2 alimentaient directement `public.*` avec des données déjà nettoyées par Spark. Pour pouvoir mesurer la qualité avant intervention, le TP3 ajoute :
 
-1. Un **schéma `staging`** qui reçoit les données brutes du Data Lake **sans contraintes** — mêmes tables que `public.*`, mais tout est nullable et sans FK.
-2. Une modification du job Spark : il écrit **d'abord dans `staging.*`** (raw), **puis** dans `public.*` (cleaned).
-3. Une **matrice de 32 contrôles SQL** sur 5 dimensions (complétude, unicité, validité, cohérence, intégrité).
-4. Des **scripts de nettoyage SQL** (imputation, correction, suppression) qui transforment `staging.*`.
-5. Une **table `data_quality_report`** qui trace chaque exécution de chaque contrôle avec un `run_id` UUID.
+1. Un schéma `staging` qui reçoit les données brutes du Data Lake sans contraintes, mêmes tables que `public.*` mais tout est nullable et sans FK.
+2. Une modification du job Spark, il écrit d'abord dans `staging.*` (raw), puis dans `public.*` (cleaned).
+3. Une matrice de 32 contrôles SQL sur 5 dimensions (complétude, unicité, validité, cohérence, intégrité).
+4. Des scripts de nettoyage SQL (imputation, correction, suppression) qui transforment `staging.*`.
+5. Une table `data_quality_report` qui trace chaque exécution de chaque contrôle avec un `run_id` UUID.
 
 ## Prérequis
 
-Stack TP1/TP2 démarrée (`./start.sh` depuis la racine). Le job Spark doit avoir tourné au moins une fois.
+Stack TP1 et TP2 démarrée (`./start.sh` depuis la racine). Le job Spark doit avoir tourné au moins une fois.
 
 ## Lancer l'audit
 
@@ -41,7 +41,7 @@ Le script :
 1. Applique le schéma `staging` et la table `data_quality_report` (idempotent).
 2. Lance les 32 contrôles sur `staging.*` (phase `before`).
 3. Lance les 32 contrôles sur `public.*` (phase `before`, montre l'apport de Spark).
-4. Exécute le nettoyage SQL sur `staging.*` (imputation → correction → suppression).
+4. Exécute le nettoyage SQL sur `staging.*` (imputation, correction, suppression).
 5. Re-lance les contrôles sur `staging.*` (phase `after`).
 6. Affiche un rapport synthétique.
 
@@ -85,25 +85,22 @@ TP3/
 │   ├── 05-resultats.md
 │   └── 06-synthese-orale.md
 └── sql/
-    ├── 00-schema-staging.sql       # CREATE SCHEMA staging + tables sans contraintes
-    ├── 01-report-table.sql         # data_quality_report + fonctions audit_control/audit_join/to_timestamp_safe
+    ├── 00-schema-staging.sql
+    ├── 01-report-table.sql
     ├── audit/
-    │   ├── 01-completude.sql       # 9 contrôles
-    │   ├── 02-unicite.sql          # 5 contrôles
-    │   ├── 03-validite.sql         # 8 contrôles
-    │   ├── 04-coherence.sql        # 5 contrôles
-    │   └── 05-integrite.sql        # 5 contrôles
+    │   ├── 01-completude.sql
+    │   ├── 02-unicite.sql
+    │   ├── 03-validite.sql
+    │   ├── 04-coherence.sql
+    │   └── 05-integrite.sql
     └── cleaning/
-        ├── 01-imputation.sql       # NULL → valeur par défaut
-        ├── 02-suppression.sql      # DELETE des lignes irrécupérables
-        └── 03-correction.sql       # normalisation + dédup
+        ├── 01-imputation.sql
+        ├── 02-suppression.sql
+        └── 03-correction.sql
 ```
 
 ## Résultats typiques
 
-- **~120 anomalies détectées** sur staging brut
-- **~7 anomalies restantes** après cleaning (conservées volontairement, cf. `04-corrections.md`)
-- **~94% de résolution**
-- `public.*` déjà propre pour 30/32 contrôles grâce à Spark
+Environ 120 anomalies détectées sur staging brut, environ 7 anomalies restantes après cleaning (conservées volontairement, cf. `04-corrections.md`), soit environ 94 pour cent de résolution. Le schéma `public.*` est déjà propre pour 30 des 32 contrôles grâce à Spark.
 
 Voir [`docs/05-resultats.md`](docs/05-resultats.md) pour les chiffres détaillés.
